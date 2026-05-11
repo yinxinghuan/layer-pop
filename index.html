@@ -1,0 +1,902 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="icon" type="image/gif" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" />
+<title>Layer Pop</title>
+<style>
+  :root { --bg: #0b001a; --accent: #00ffff; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: var(--bg);
+    color: #fff;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+    overflow: hidden; user-select: none; touch-action: none;
+    overscroll-behavior: none;
+  }
+  body { border-radius: 24px; overflow: hidden; position: relative; }
+  #stage {
+    position: absolute; inset: 0; display: block;
+    width: 100%; height: 100%; background: var(--bg);
+  }
+  .hud {
+    position: absolute; left: 0; right: 0; top: 0;
+    text-align: center; pointer-events: none;
+    padding-top: env(safe-area-inset-top);
+  }
+  .hud .label {
+    margin-top: 22px; font-size: 20px; letter-spacing: 0.22em;
+    color: var(--accent); text-transform: uppercase;
+    text-shadow: 0 0 12px rgba(0,255,255,0.55);
+  }
+  .hud .counter {
+    margin-top: 4px; font-size: 56px; font-weight: 700; line-height: 1;
+    color: #fff; letter-spacing: 0.02em;
+    text-shadow: 0 0 18px rgba(255,255,255,0.55), 0 0 38px rgba(0,255,255,0.35);
+    font-variant-numeric: tabular-nums;
+  }
+  .hud .hint {
+    margin-top: 18px; font-size: 13px; letter-spacing: 0.24em;
+    color: rgba(255,255,255,0.42);
+    animation: hp-pulse 2.4s ease-in-out infinite;
+  }
+  .hud .hint.hidden { opacity: 0; transition: opacity 0.6s ease; }
+  .hud .fever {
+    display: none;
+    margin-top: 18px; font-size: 22px; font-weight: 900;
+    color: #ff3300; letter-spacing: 0.24em;
+    text-shadow: 0 0 10px #ff3300, 0 0 20px rgba(255, 51, 0, 0.7);
+    animation: hp-pulse 0.8s ease-in-out infinite;
+  }
+  .hud .fever.show { display: block; }
+  @keyframes hp-pulse {
+    0%, 100% { opacity: 0.55; }
+    50%      { opacity: 1; }
+  }
+  .theme-dots {
+    position: absolute; right: 14px; top: 14px;
+    display: flex; gap: 8px; padding: 8px;
+    pointer-events: auto;
+    padding-top: calc(8px + env(safe-area-inset-top));
+  }
+  .theme-dots .dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    cursor: pointer; opacity: 0.5;
+    transition: transform 0.18s ease, opacity 0.18s ease;
+    box-shadow: 0 0 8px currentColor;
+  }
+  .theme-dots .dot.active { opacity: 1; transform: scale(1.18); }
+  .theme-dots .dot[data-t="prism"]  { background: #00ffaa; color: #00ffaa; }
+  .theme-dots .dot[data-t="sunset"] { background: #ff6a3d; color: #ff6a3d; }
+  .theme-dots .dot[data-t="ocean"]  { background: #4cc3ff; color: #4cc3ff; }
+  .credits {
+    position: absolute; left: 0; right: 0; bottom: 16px;
+    text-align: center; color: rgba(255,255,255,0.18);
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    pointer-events: none; padding-bottom: env(safe-area-inset-bottom);
+  }
+  .win-overlay {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 20;
+  }
+  .win-overlay.show { display: flex; }
+  .win-title {
+    font-size: 22px;
+    color: var(--accent);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    text-shadow: 0 0 14px rgba(0,255,255,0.7);
+    margin-bottom: 28px;
+  }
+  .win-btn {
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-family: inherit;
+    font-size: 16px;
+    letter-spacing: 0.24em;
+    padding: 14px 32px;
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: 0 0 20px rgba(0,255,255,0.45);
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .win-btn:active { transform: scale(0.95); background: rgba(0,255,255,0.12); }
+</style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+
+  <div class="hud">
+    <div class="label">Layers Left</div>
+    <div class="counter" id="counter">1000</div>
+    <div class="hint"  id="hint">Drag to rotate rings</div>
+    <div class="fever" id="fever">FEVER MODE!</div>
+  </div>
+
+  <div class="win-overlay" id="winOverlay">
+    <div class="win-title">You broke through.</div>
+    <button class="win-btn" id="playAgainBtn">PLAY AGAIN</button>
+  </div>
+
+  <div class="theme-dots" id="themeDots">
+    <div class="dot active" data-t="prism"></div>
+    <div class="dot" data-t="sunset"></div>
+    <div class="dot" data-t="ocean"></div>
+  </div>
+
+  <div class="credits">Pop your fun</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ----- Themes ---------------------------------------------------------------
+  // The original uses hsl(j*12 % 360, 80%, 55%) for ring colors — full rainbow
+  // cycling through layers. Each theme remaps to a hue band; prism keeps the
+  // full cycle, sunset stays warm, ocean stays cool.
+  const THEMES = {
+    prism: {
+      hueBase: 0, hueSpread: 360, hueDrift: 0,
+      core: '#ff00ff', white: '#ffffff', red: '#ff3300',
+      bg: '#0b001a',  trailRGB: '255,255,255',
+      root: 261.63,
+    },
+    sunset: {
+      hueBase: 350, hueSpread: 80, hueDrift: 0,
+      core: '#ffd400', white: '#fff2c8', red: '#ff3300',
+      bg: '#1a0508',  trailRGB: '255,220,170',
+      root: 220.00,
+    },
+    ocean: {
+      hueBase: 165, hueSpread: 120, hueDrift: 0,
+      core: '#a8f0ff', white: '#e0fbff', red: '#ff5d8a',
+      bg: '#020a18',  trailRGB: '180,240,255',
+      root: 196.00,
+    },
+  };
+  const PENTA = [0, 2, 4, 7, 9, 12, 14, 16];
+
+  // ----- DOM + Canvas --------------------------------------------------------
+  const canvas    = document.getElementById('stage');
+  const ctx       = canvas.getContext('2d');
+  const counterEl = document.getElementById('counter');
+  const hintEl    = document.getElementById('hint');
+  const feverEl   = document.getElementById('fever');
+  const dotsEl    = document.getElementById('themeDots');
+
+  let W = 0, H = 0, DPR = 1, cx = 0, cy = 0, baseScale = 1;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width  = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    cx = W / 2; cy = H / 2;
+    baseScale = Math.min(W, H) / 414;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // ----- Pre-generated layers ------------------------------------------------
+  const TOTAL_LAYERS = 1001;
+  const layerGaps = new Float32Array(TOTAL_LAYERS);
+  (function buildLayers() {
+    let w = 0;
+    for (let k = TOTAL_LAYERS - 1; k >= 0; k--) {
+      w += (Math.random() - 0.5) * Math.PI * 0.9;
+      layerGaps[k] = w;
+    }
+  })();
+  const GAP_WIDTH = Math.PI / 2.5;        // E in original
+
+  // ----- State ---------------------------------------------------------------
+  // Ball y is in LAYER UNITS. y decreases as ball falls (matches original).
+  // y = N + T means ball is sitting on top of layer N (T ≈ 0.15 above center).
+  // Layer N is "popped" when ball passes through (y crosses N from above).
+  const T_THRESH    = 0.15;
+  const GRAVITY_K   = -15;   // layer-units/sec² (ball y decreases over time)
+  const BOUNCE_VY   = 5;     // layer-units/sec UP (positive = ball bouncing up)
+  const CAMERA_LERP = 12;
+  const MAZE_LERP   = 20;
+  const DRAG_SENS   = 0.012;
+
+  // Layer→radius mapping in screen pixels. The "base" outer ring sits at
+  // I_BASE px; each layer further out is +60 px, each layer inward is -60 px.
+  const LAYER_RADIUS_STEP = 60;
+
+  let themeName = 'prism';
+  let theme = THEMES[themeName];
+
+  const state = {
+    y: 1000.5,
+    vy: 0,
+    cameraY: 1000.5,
+    currentLayer: 1000,
+    mazeRot: 0,
+    targetMazeRot: 0,
+    passedSinceBounce: 0,
+    fever: false,
+    feverVisible: false,
+    feverShownAt: 0,
+    particles: [],
+    trails: [],
+  };
+  const FEVER_MIN_DISPLAY_MS = 700;
+
+  function I_BASE() { return Math.min(W, H) * 0.35; }
+  // radius for layer j at current camera position
+  function G(j) { return I_BASE() + (j - state.cameraY) * LAYER_RADIUS_STEP; }
+
+  // ----- Input ---------------------------------------------------------------
+  let dragging = false;
+  let dragStartX = 0;
+  let dragStartRot = 0;
+  let interacted = false;
+
+  canvas.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    dragStartX = e.clientX;
+    dragStartRot = state.targetMazeRot;
+    if (!interacted) {
+      interacted = true;
+      audio.unlock();
+      hintEl.classList.add('hidden');
+    }
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    state.targetMazeRot = dragStartRot + (e.clientX - dragStartX) * DRAG_SENS;
+  });
+  function endDrag(e) {
+    if (!dragging) return;
+    dragging = false;
+    try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+  }
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+
+  // Theme dots
+  dotsEl.addEventListener('pointerdown', (e) => {
+    const t = e.target.closest('.dot');
+    if (!t) return;
+    const name = t.dataset.t;
+    if (!THEMES[name] || name === themeName) return;
+    themeName = name;
+    theme = THEMES[name];
+    document.body.style.background = theme.bg;
+    document.documentElement.style.setProperty('--bg', theme.bg);
+    [...dotsEl.children].forEach(d => d.classList.toggle('active', d.dataset.t === name));
+    audio.onThemeChange();
+  });
+
+  function showFever(on) {
+    feverEl.classList.toggle('show', on);
+    hintEl.style.display = on ? 'none' : '';
+  }
+
+  // ----- Audio ---------------------------------------------------------------
+  // Synthwave engine: a 4-bar BGM loop (110 BPM) + chord-pluck pops with a
+  // pitch climb tied to cascade depth + bass thump on bounce + chord blast on
+  // smash + riser on fever entry. Built on raw Web Audio.
+  const audio = (() => {
+    let ac = null;
+    let masterGain, bgmGain, fxGain, delayNode, delayWet, delayFb;
+    let unlocked = false;
+    let bgmStarted = false;
+    let stepIdx = 0;
+    let nextStepT = 0;
+    let lastPopT = 0;
+    let lastBounceT = 0;
+
+    // Tempo + step grid: 110 BPM, 1/16 note resolution
+    const BPM = 110;
+    const SIXTEENTH = 60 / BPM / 4;        // ≈ 0.136 s
+    const LOOP_STEPS = 16 * 16;             // 16 bars × 16 = 256 steps (~21.8 s)
+
+    // 16-bar progression in A minor with four 4-bar sections.
+    // Section A  (bars 0-3):  Am – F – C – G       — main theme
+    // Section A' (bars 4-7):  Am – F – C – G       — same chords, brighter arp
+    // Section B  (bars 8-11): Dm – Am – F – E      — lyrical lift
+    // Section A''(bars 12-15):Am – F – C – G       — return / resolution
+    const Am = { root: 110.00, third: 130.81, fifth: 164.81, oct: 220.00 };
+    const F  = { root:  87.31, third: 110.00, fifth: 130.81, oct: 174.61 };
+    const C  = { root:  65.41, third:  82.41, fifth:  98.00, oct: 130.81 };
+    const G  = { root:  98.00, third: 123.47, fifth: 146.83, oct: 196.00 };
+    const Dm = { root:  73.42, third:  87.31, fifth: 110.00, oct: 146.83 };
+    const E  = { root:  82.41, third: 103.83, fifth: 123.47, oct: 164.81 };
+    const CHORDS = [
+      Am, F, C, G,        // section A
+      Am, F, C, G,        // section A'
+      Dm, Am, F, E,       // section B (lift)
+      Am, F, C, G,        // section A''
+    ];
+
+    // Four arp patterns, one per section. Each is 16 sixteenths (one bar).
+    // Indexes into [root*2, third*2, fifth*2, oct*2] — values are -1 for rest.
+    const ARP_A = [0, 1, 2, 3, 2, 1, 2, 3, 0, 1, 2, 3, 2, 1, 2, 3];        // ascending
+    const ARP_A_BRIGHT = [3, 2, 3, 1, 3, 2, 3, 1, 3, 2, 3, 1, 0, 2, 3, 1]; // octave-driven, brighter
+    const ARP_B = [0, 2, 1, 3, 2, 0, 1, 2, 0, 2, 1, 3, 0, 2, 1, 3];        // lyrical, lifted
+    const ARP_A_FINAL = [0, 1, 2, 3, 2, 3, 2, 1, 0, 1, 2, 3, 0, 2, 3, 2];  // resolves down
+
+    function ensure() {
+      if (ac) return ac;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ac = new AC();
+      masterGain = ac.createGain(); masterGain.gain.value = 0.75;
+      masterGain.connect(ac.destination);
+
+      // FX delay (used for arp echoes, smash tails, cascade resonance)
+      delayNode = ac.createDelay(1.0);
+      delayNode.delayTime.value = SIXTEENTH * 3;       // dotted eighth
+      delayFb   = ac.createGain(); delayFb.gain.value = 0.42;
+      delayWet  = ac.createGain(); delayWet.gain.value = 0.32;
+      delayNode.connect(delayFb); delayFb.connect(delayNode);
+      delayNode.connect(delayWet);
+      delayWet.connect(masterGain);
+
+      // BGM bus — fades in after first interaction; stays present
+      bgmGain = ac.createGain(); bgmGain.gain.value = 0;
+      bgmGain.connect(masterGain);
+      fxGain  = ac.createGain(); fxGain.gain.value = 1;
+      fxGain.connect(masterGain);
+      return ac;
+    }
+
+    function unlock() {
+      if (unlocked) return;
+      if (!ensure()) return;
+      if (ac.state !== 'running') ac.resume();
+      unlocked = true;
+      // start the synthwave loop with a 2s fade-in
+      setTimeout(() => {
+        if (!unlocked) return;
+        const t = ac.currentTime;
+        bgmGain.gain.setValueAtTime(0, t);
+        bgmGain.gain.linearRampToValueAtTime(0.55, t + 2.0);
+        nextStepT = t + 0.1;
+        stepIdx = 0;
+        bgmStarted = true;
+        scheduler();          // kicks off; reschedules via setTimeout
+      }, 400);
+    }
+
+    function onThemeChange() {
+      if (!ac || !unlocked) return;
+      // brief BGM dip so the theme switch feels intentional
+      const t = ac.currentTime;
+      bgmGain.gain.cancelScheduledValues(t);
+      bgmGain.gain.setValueAtTime(bgmGain.gain.value, t);
+      bgmGain.gain.linearRampToValueAtTime(0.15, t + 0.2);
+      bgmGain.gain.linearRampToValueAtTime(0.55, t + 1.2);
+    }
+
+    // ----- Voices ----------------------------------------------------------
+    function kick(t, vel = 0.6) {
+      const o = ac.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(120, t);
+      o.frequency.exponentialRampToValueAtTime(40, t + 0.09);
+      const g = ac.createGain();
+      g.gain.setValueAtTime(vel, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+      o.connect(g); g.connect(bgmGain);
+      o.start(t); o.stop(t + 0.2);
+    }
+
+    function bass(t, freq, dur = 0.42, vel = 0.32) {
+      const o = ac.createOscillator(); o.type = 'sawtooth';
+      o.frequency.value = freq;
+      const sub = ac.createOscillator(); sub.type = 'sine';
+      sub.frequency.value = freq;
+      const lp = ac.createBiquadFilter(); lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(900, t);
+      lp.frequency.exponentialRampToValueAtTime(220, t + dur);
+      const g = ac.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(vel, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      const subG = ac.createGain(); subG.gain.value = 0.6;
+      o.connect(lp); sub.connect(subG); subG.connect(lp); lp.connect(g); g.connect(bgmGain);
+      o.start(t); sub.start(t); o.stop(t + dur + 0.05); sub.stop(t + dur + 0.05);
+    }
+
+    function pad(t, chord, dur = 2.18, vel = 0.10) {
+      [chord.root * 2, chord.third * 2, chord.fifth * 2].forEach((f, i) => {
+        const o1 = ac.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = f * 0.997;
+        const o2 = ac.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = f * 1.003;
+        const lp = ac.createBiquadFilter(); lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(900, t);
+        lp.frequency.exponentialRampToValueAtTime(2200, t + dur * 0.4);
+        lp.frequency.exponentialRampToValueAtTime(800, t + dur);
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(vel * (1 - i * 0.2), t + 0.3);
+        g.gain.linearRampToValueAtTime(vel * 0.7 * (1 - i * 0.2), t + dur * 0.7);
+        g.gain.linearRampToValueAtTime(0, t + dur);
+        o1.connect(lp); o2.connect(lp); lp.connect(g); g.connect(bgmGain);
+        o1.start(t); o2.start(t);
+        o1.stop(t + dur + 0.1); o2.stop(t + dur + 0.1);
+      });
+    }
+
+    function arp(t, freq, vel = 0.10) {
+      const o = ac.createOscillator(); o.type = 'triangle';
+      o.frequency.value = freq;
+      const g = ac.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(vel, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+      o.connect(g);
+      g.connect(bgmGain);
+      g.connect(delayNode);            // echo into the dotted-eighth delay
+      o.start(t); o.stop(t + 0.16);
+    }
+
+    // ----- BGM scheduler ----------------------------------------------------
+    function scheduleStep(stepGlobal, t) {
+      const step = stepGlobal % LOOP_STEPS;
+      const barIdx = Math.floor(step / 16);        // 0..15
+      const beatIdx = Math.floor(step / 4);         // 0..63
+      const stepInBar = step % 16;
+      const chord = CHORDS[barIdx];
+
+      // Section selector (every 4 bars). Drives arp pattern + voicing choice.
+      const section = Math.floor(barIdx / 4);       // 0 A, 1 A', 2 B, 3 A''
+      const arpPat =
+        section === 0 ? ARP_A :
+        section === 1 ? ARP_A_BRIGHT :
+        section === 2 ? ARP_B : ARP_A_FINAL;
+
+      // Drums — vary by section
+      if (stepInBar % 4 === 0) {
+        // Section B drops the kick on beat 2 for breathing room
+        if (section === 2 && stepInBar === 4) {
+          // skip — leave space
+        } else {
+          kick(t, beatIdx % 2 === 0 ? 0.62 : 0.5);
+        }
+      }
+      // Ghost kick on the "and" of beat 4 every 2 bars (groove)
+      if (stepInBar === 14 && barIdx % 2 === 1) kick(t, 0.32);
+
+      // Bass: root on beat 1, fifth on beat 3 — section B is sparser
+      if (stepInBar === 0) bass(t, chord.root, 0.55, 0.36);
+      if (stepInBar === 8 && section !== 2) bass(t, chord.fifth, 0.45, 0.30);
+      // Octave kicker on the last bar of each section (turnaround)
+      if (stepInBar === 12 && barIdx % 4 === 3) bass(t, chord.root * 2, 0.30, 0.25);
+
+      // Pad: retrigger on each bar. Slightly fatter in section A'.
+      if (stepInBar === 0) {
+        const padVel = section === 1 ? 0.11 : section === 2 ? 0.08 : 0.09;
+        pad(t, chord, 2.18, padVel);
+      }
+
+      // Arp: 1/8 note pattern through the chord, with section-specific shape
+      if (stepInBar % 2 === 0) {
+        const tones = [chord.root * 2, chord.third * 2, chord.fifth * 2, chord.oct * 2];
+        const idx = arpPat[stepInBar];
+        if (idx >= 0) {
+          // Bright section gets an extra octave up on a couple of beats
+          const octBoost = (section === 1 && (stepInBar === 0 || stepInBar === 8)) ? 2 : 1;
+          arp(t, tones[idx] * octBoost, section === 2 ? 0.085 : 0.095);
+        }
+      }
+    }
+
+    function scheduler() {
+      if (!bgmStarted || !ac) return;
+      while (nextStepT < ac.currentTime + 0.25) {
+        scheduleStep(stepIdx, nextStepT);
+        stepIdx++;
+        nextStepT += SIXTEENTH;
+      }
+      setTimeout(scheduler, 30);
+    }
+
+    // ----- Event sounds -----------------------------------------------------
+    // Pop: triad pluck climbing pentatonic-by-cascade-depth, echo via delay.
+    function pop(cascadeDepth) {
+      if (!unlocked) return;
+      const now = performance.now();
+      if (now - lastPopT < 22) return;
+      lastPopT = now;
+      const t = ac.currentTime;
+      const PENTA_LOCAL = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21];
+      const stepSemi = PENTA_LOCAL[Math.min(cascadeDepth, PENTA_LOCAL.length - 1)];
+      const freq = theme.root * Math.pow(2, stepSemi / 12);
+      const voicing = [freq, freq * 1.2599, freq * 1.4983]; // root + m3 + 5th
+      voicing.forEach((f, i) => {
+        const o1 = ac.createOscillator(); o1.type = 'triangle'; o1.frequency.value = f;
+        const o2 = ac.createOscillator(); o2.type = 'sine';     o2.frequency.value = f * 2;
+        const lp = ac.createBiquadFilter(); lp.type = 'lowpass';
+        lp.frequency.value = 4800;
+        const g = ac.createGain();
+        const peak = 0.13 - i * 0.025;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(peak, t + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+        o1.connect(lp); o2.connect(lp); lp.connect(g); g.connect(fxGain);
+        if (cascadeDepth >= 1) g.connect(delayNode);   // chains shimmer
+        o1.start(t); o2.start(t);
+        o1.stop(t + 0.5); o2.stop(t + 0.5);
+      });
+    }
+
+    // Bounce: short filtered noise click + tiny sub thump
+    function bounce() {
+      if (!unlocked) return;
+      const now = performance.now();
+      if (now - lastBounceT < 55) return;
+      lastBounceT = now;
+      const t = ac.currentTime;
+      // noise click
+      const len = Math.floor(ac.sampleRate * 0.05);
+      const buf = ac.createBuffer(1, len, ac.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() - 0.5) * 2;
+      const ns = ac.createBufferSource(); ns.buffer = buf;
+      const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1800; bp.Q.value = 1.8;
+      const ng = ac.createGain();
+      ng.gain.setValueAtTime(0.08, t);
+      ng.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+      ns.connect(bp); bp.connect(ng); ng.connect(fxGain);
+      ns.start(t);
+      // sub thump
+      const sub = ac.createOscillator(); sub.type = 'sine';
+      sub.frequency.setValueAtTime(95, t);
+      sub.frequency.exponentialRampToValueAtTime(55, t + 0.09);
+      const sg = ac.createGain();
+      sg.gain.setValueAtTime(0.10, t);
+      sg.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      sub.connect(sg); sg.connect(fxGain);
+      sub.start(t); sub.stop(t + 0.15);
+    }
+
+    // Smash: big root chord blast with filter sweep + delay tail
+    function smash() {
+      if (!unlocked) return;
+      const t = ac.currentTime;
+      const r = theme.root;
+      const notes = [r * 0.5, r * 0.5 * 1.2599, r * 0.5 * 1.4983, r];
+      notes.forEach((f, i) => {
+        const o1 = ac.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = f;
+        const o2 = ac.createOscillator(); o2.type = 'square';   o2.frequency.value = f * 0.5;
+        const lp = ac.createBiquadFilter(); lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(500, t);
+        lp.frequency.exponentialRampToValueAtTime(4500, t + 0.25);
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.16 - i * 0.02, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.85);
+        o1.connect(lp); o2.connect(lp); lp.connect(g); g.connect(fxGain);
+        g.connect(delayNode);
+        o1.start(t); o2.start(t);
+        o1.stop(t + 1.0); o2.stop(t + 1.0);
+      });
+    }
+
+    // Glass shatter: multi-shard high-frequency sine pings with random pitch +
+    // a highpass-filtered noise sweep. Intensity scales the shard count and
+    // attack. Used on cascade milestones (3 / 6 / 10) so rapid pass-throughs
+    // feel like "breaking through" a wall of crystal.
+    function glassBreak(intensity = 1) {
+      if (!unlocked) return;
+      const t = ac.currentTime;
+      const shards = 5 + Math.floor(intensity * 5);  // 5..15
+      for (let i = 0; i < shards; i++) {
+        const delay = Math.random() * 0.13;
+        const baseF = 2400 + Math.random() * 4800;     // 2.4 – 7.2 kHz
+        const o = ac.createOscillator();
+        o.type = i % 2 === 0 ? 'sine' : 'triangle';
+        o.frequency.setValueAtTime(baseF, t + delay);
+        o.frequency.exponentialRampToValueAtTime(baseF * 0.42, t + delay + 0.16);
+        const g = ac.createGain();
+        const peak = (0.045 + Math.random() * 0.035) * intensity;
+        g.gain.setValueAtTime(0, t + delay);
+        g.gain.linearRampToValueAtTime(peak, t + delay + 0.003);
+        g.gain.exponentialRampToValueAtTime(0.001, t + delay + 0.20);
+        o.connect(g); g.connect(fxGain);
+        if (i < 3) g.connect(delayNode);                // a few shards echo
+        o.start(t + delay); o.stop(t + delay + 0.24);
+      }
+      // High-frequency noise sweep — the "crunch" between pings
+      const len = Math.floor(ac.sampleRate * 0.18);
+      const buf = ac.createBuffer(1, len, ac.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) {
+        const env = 1 - i / len;
+        data[i] = (Math.random() - 0.5) * 2 * env;
+      }
+      const ns = ac.createBufferSource(); ns.buffer = buf;
+      const hp = ac.createBiquadFilter(); hp.type = 'highpass';
+      hp.frequency.value = 3200;
+      const bp = ac.createBiquadFilter(); bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(5000, t);
+      bp.frequency.exponentialRampToValueAtTime(2400, t + 0.18);
+      bp.Q.value = 1.4;
+      const ng = ac.createGain();
+      ng.gain.setValueAtTime(0.10 * intensity, t);
+      ng.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      ns.connect(hp); hp.connect(bp); bp.connect(ng); ng.connect(fxGain);
+      ng.connect(delayNode);
+      ns.start(t);
+    }
+
+    // Fever entry: ascending sine sweep that flies through the delay
+    function feverIn() {
+      if (!unlocked) return;
+      const t = ac.currentTime;
+      const o = ac.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(140, t);
+      o.frequency.exponentialRampToValueAtTime(1900, t + 0.45);
+      const g = ac.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.20, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+      o.connect(g); g.connect(fxGain);
+      g.connect(delayNode);
+      o.start(t); o.stop(t + 0.6);
+    }
+
+    return { unlock, pop, smash, bounce, feverIn, glassBreak, onThemeChange };
+  })();
+
+  // ----- Helpers -------------------------------------------------------------
+  function themedHueForLayer(j) {
+    // Original: hsl(j*12 % 360). For non-prism themes remap into a hue band.
+    const raw = (j * 12) % 360;
+    const inBand = (raw / 360) * theme.hueSpread;
+    return ((theme.hueBase + inBand) % 360 + 360) % 360;
+  }
+
+  function emitPassParticles(ballScreenX, ballScreenY, isSmash) {
+    const count = isSmash ? 28 : 10;
+    const speed = isSmash ? 240 : 160;
+    const hue = themedHueForLayer(state.currentLayer);
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const spd = speed * (0.6 + Math.random() * 0.8) * baseScale;
+      state.particles.push({
+        x: ballScreenX,
+        y: ballScreenY,
+        vx: Math.cos(a) * spd,
+        vy: Math.sin(a) * spd - (isSmash ? 30 : 0),
+        life: 0.55 + Math.random() * 0.55,
+        maxLife: 1,
+        size: (2 + Math.random() * 2.5) * baseScale,
+        color: isSmash ? theme.red : `hsl(${hue}, 90%, 65%)`,
+      });
+    }
+  }
+
+  // ----- Tick / simulate -----------------------------------------------------
+  function simulate(dt) {
+    // Smooth camera + maze rotation
+    state.cameraY += (state.y - state.cameraY) * Math.min(1, CAMERA_LERP * dt);
+    state.mazeRot += (state.targetMazeRot - state.mazeRot) * Math.min(1, MAZE_LERP * dt);
+
+    // Once all layers are popped, freeze physics but keep visuals alive so
+    // the final pop's particles + trail can finish their flight.
+    const physicsActive = state.currentLayer > 0;
+    if (physicsActive) {
+      state.vy += GRAVITY_K * dt;
+      state.y  += state.vy  * dt;
+    }
+
+    // Layer interaction when ball gets within T of current layer
+    if (physicsActive && state.y - T_THRESH <= state.currentLayer) {
+      const gapCenter = layerGaps[state.currentLayer] + state.mazeRot;
+      // angular delta between gap center and ball's entry angle (top = -π/2)
+      let d = (-Math.PI / 2 - gapCenter) % (Math.PI * 2);
+      if (d >  Math.PI) d -= Math.PI * 2;
+      if (d < -Math.PI) d += Math.PI * 2;
+      const aligned = Math.abs(d) < GAP_WIDTH / 2;
+
+      const ballScreenY = cy - G(state.y);
+      if (aligned) {
+        state.currentLayer--;
+        state.passedSinceBounce++;
+        if (state.passedSinceBounce >= 3 && !state.fever) {
+          state.fever = true;
+          audio.feverIn();
+        }
+        if (state.fever && !state.feverVisible) {
+          state.feverVisible = true;
+          state.feverShownAt = performance.now();
+          showFever(true);
+        }
+        // Glass shatter on cascade milestones — bigger crash each tier.
+        const cas = state.passedSinceBounce;
+        if (cas === 3)       audio.glassBreak(0.7);
+        else if (cas === 6)  audio.glassBreak(1.1);
+        else if (cas === 10) audio.glassBreak(1.6);
+        else if (cas > 10 && cas % 5 === 0) audio.glassBreak(1.8);
+        emitPassParticles(cx, ballScreenY, false);
+        audio.pop(state.passedSinceBounce - 1);
+        bumpCounter();
+      } else if (state.fever) {
+        state.fever = false;
+        state.passedSinceBounce = 0;
+        state.currentLayer--;
+        emitPassParticles(cx, ballScreenY, true);
+        audio.smash();
+        bumpCounter();
+      } else {
+        // Bounce — reset position to top of current layer with upward vy
+        state.y  = state.currentLayer + T_THRESH;
+        state.vy = BOUNCE_VY;
+        state.passedSinceBounce = 0;
+        audio.bounce();
+      }
+    }
+
+    // Trail samples (drawn at ball's screen position over time)
+    if (physicsActive) state.trails.push({ x: cx, y: cy - G(state.y), life: 0.18 });
+
+    // Update particles + trails
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+      const p = state.particles[i];
+      p.x  += p.vx * dt;
+      p.y  += p.vy * dt;
+      p.vy += 120 * dt;       // slight gravity on particles for natural settle
+      p.life -= dt;
+      if (p.life <= 0) state.particles.splice(i, 1);
+    }
+    for (let i = state.trails.length - 1; i >= 0; i--) {
+      state.trails[i].life -= dt;
+      if (state.trails[i].life <= 0) state.trails.splice(i, 1);
+    }
+
+    // Visual-only fever timer release
+    if (state.feverVisible && !state.fever) {
+      if (performance.now() - state.feverShownAt >= FEVER_MIN_DISPLAY_MS) {
+        state.feverVisible = false;
+        showFever(false);
+      }
+    }
+  }
+  const winOverlay = document.getElementById('winOverlay');
+  const playAgainBtn = document.getElementById('playAgainBtn');
+  playAgainBtn.addEventListener('pointerdown', () => location.reload());
+
+  let gameOver = false;
+  function bumpCounter() {
+    counterEl.textContent = state.currentLayer.toLocaleString('en-US');
+    if (state.currentLayer <= 0 && !gameOver) {
+      gameOver = true;
+      setTimeout(() => winOverlay.classList.add('show'), 500);
+    }
+  }
+
+  // ----- Render --------------------------------------------------------------
+  function fillBackground() {
+    ctx.fillStyle = theme.bg;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  function drawCore() {
+    ctx.beginPath();
+    ctx.arc(cx, cy, 15 * baseScale, 0, Math.PI * 2);
+    ctx.fillStyle = theme.core;
+    ctx.shadowColor = theme.core;
+    ctx.shadowBlur = 20 * baseScale;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  function drawLayers() {
+    // 11 layers around the camera, matching the original's window.
+    const cur = state.currentLayer;
+    const I = I_BASE();
+    const maxR = Math.max(W, H) * 1.5;
+    for (let j = cur - 8; j <= cur + 2; j++) {
+      if (j <= 0 || j > 1000) continue;
+      const B = G(j);
+      if (B < 20 * baseScale || B > maxR) continue;
+      const gapCenter = layerGaps[j] + state.mazeRot;
+      const a0 = gapCenter + GAP_WIDTH / 2;
+      const a1 = gapCenter + Math.PI * 2 - GAP_WIDTH / 2;
+      const hue = themedHueForLayer(j);
+      const stroke = `hsl(${hue}, 80%, 55%)`;
+      ctx.beginPath();
+      ctx.arc(cx, cy, B, a0, a1, false);
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = (j === cur ? 10 : 6) * baseScale;
+      ctx.lineCap = 'round';
+      if (j === cur) {
+        ctx.shadowBlur = 10 * baseScale;
+        ctx.shadowColor = stroke;
+      } else {
+        ctx.shadowBlur = 0;
+      }
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+  }
+
+  function drawParticles() {
+    for (const p of state.particles) {
+      const a = Math.max(0, p.life / p.maxLife);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 8 * baseScale;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+  }
+
+  function drawTrailAndBall() {
+    const ballX = cx;
+    const ballY = cy - G(state.y);
+    const inFever = state.passedSinceBounce >= 3;
+    const ballColor = inFever ? theme.red : theme.white;
+    const rgb = inFever ? '255,51,0' : theme.trailRGB;
+
+    if (state.trails.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(state.trails[0].x, state.trails[0].y);
+      for (let i = 1; i < state.trails.length; i++) {
+        ctx.lineTo(state.trails[i].x, state.trails[i].y);
+      }
+      ctx.strokeStyle = `rgba(${rgb}, 0.4)`;
+      ctx.lineWidth = 10 * baseScale;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }
+
+    ctx.beginPath();
+    ctx.arc(ballX, ballY, 8 * baseScale, 0, Math.PI * 2);
+    ctx.fillStyle = ballColor;
+    ctx.shadowColor = ballColor;
+    ctx.shadowBlur = (inFever ? 25 : 15) * baseScale;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  // ----- Loop ---------------------------------------------------------------
+  let lastT = performance.now();
+  let running = true;
+  function tick(now) {
+    if (!running) { lastT = now; requestAnimationFrame(tick); return; }
+    let dt = Math.min(0.05, (now - lastT) / 1000);
+    lastT = now;
+    simulate(dt);
+
+    fillBackground();
+    drawCore();
+    drawLayers();
+    drawParticles();
+    drawTrailAndBall();
+
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame((t) => { lastT = t; tick(t); });
+
+  document.addEventListener('visibilitychange', () => {
+    running = document.visibilityState === 'visible';
+    lastT = performance.now();
+  });
+})();
+</script>
+</body>
+</html>
