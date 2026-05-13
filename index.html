@@ -113,6 +113,139 @@
     transition: transform 0.15s ease, background 0.15s ease;
   }
   .win-btn:active { transform: scale(0.95); background: rgba(0,255,255,0.12); }
+
+  /* leaderboard icon button (reused: HUD + win overlay) */
+  .lb-icon-btn {
+    width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(0,255,255,0.35);
+    background: rgba(0,255,255,0.08); color: var(--accent);
+    font-size: 18px; line-height: 1; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 12px rgba(0,255,255,0.25);
+    transition: background 0.15s, transform 0.08s;
+  }
+  .lb-icon-btn:active { background: rgba(0,255,255,0.2); transform: scale(0.9); }
+
+  .lb-hud {
+    position: absolute; left: 14px; top: 14px;
+    padding-top: calc(env(safe-area-inset-top));
+    z-index: 10;
+  }
+  .win-overlay .lb-icon-btn { margin-top: 18px; }
+
+  /* leaderboard overlay */
+  #lb-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    background: rgba(0,0,0,0.72);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  #lb-overlay.show { opacity: 1; pointer-events: all; }
+  #lb-panel {
+    width: 100%; max-width: 360px; max-height: 82vh;
+    display: flex; flex-direction: column;
+    border-radius: 20px;
+    background: linear-gradient(160deg, rgba(20,12,40,0.98) 0%, rgba(8,4,22,0.98) 100%);
+    border: 1px solid rgba(0,255,255,0.18);
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 30px rgba(0,255,255,0.15), inset 0 1px 0 rgba(255,255,255,0.05);
+    overflow: hidden;
+    animation: lb-enter 0.32s cubic-bezier(0.34,1.4,0.64,1) both;
+    font-family: inherit;
+  }
+  #lb-overlay:not(.show) #lb-panel { animation: none; }
+  .lb-hdr {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 18px 14px;
+    border-bottom: 1px solid rgba(0,255,255,0.1);
+    flex-shrink: 0;
+  }
+  .lb-hdr-left { display: flex; align-items: center; gap: 10px; }
+  .lb-hdr-icon { font-size: 22px; filter: drop-shadow(0 0 10px rgba(0,255,255,0.6)); }
+  .lb-hdr-title {
+    font-size: 14px; font-weight: 700; color: var(--accent);
+    letter-spacing: 0.22em; text-transform: uppercase;
+    text-shadow: 0 0 12px rgba(0,255,255,0.45);
+  }
+  .lb-hdr-game { font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 2px; letter-spacing: 0.14em; }
+  .lb-close {
+    width: 30px; height: 30px; border-radius: 50%; border: none;
+    background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.55);
+    font-size: 12px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent; flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .lb-close:active { background: rgba(255,255,255,0.18); transform: scale(0.9); }
+
+  .lb-tabs { display: flex; gap: 6px; padding: 12px 14px 0; flex-shrink: 0; }
+  .lb-tab {
+    flex: 1; padding: 9px 8px; border: 1px solid transparent; border-radius: 10px;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.5);
+    font-family: inherit; letter-spacing: 0.16em; text-transform: uppercase;
+    -webkit-tap-highlight-color: transparent; transition: background 0.2s, color 0.2s;
+  }
+  .lb-tab.active {
+    background: linear-gradient(135deg, rgba(0,255,255,0.18), rgba(0,180,255,0.1));
+    color: var(--accent); border-color: rgba(0,255,255,0.28);
+  }
+
+  .lb-body { flex: 1; overflow-y: auto; padding: 10px 12px 16px; -webkit-overflow-scrolling: touch; }
+  .lb-body::-webkit-scrollbar { display: none; }
+  .lb-state {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 12px; padding: 40px 20px;
+  }
+  .lb-state-icon { font-size: 32px; }
+  .lb-state-text { font-size: 13px; color: rgba(255,255,255,0.4); text-align: center; line-height: 1.5; letter-spacing: 0.08em; }
+  .lb-spinner {
+    display: block; width: 26px; height: 26px; border-radius: 50%;
+    border: 3px solid rgba(0,255,255,0.15); border-top-color: var(--accent);
+    animation: lb-spin 0.8s linear infinite;
+  }
+
+  .lb-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 12px; margin-bottom: 4px;
+    background: rgba(255,255,255,0.035);
+  }
+  .lb-row.top { background: rgba(0,255,255,0.06); border: 1px solid rgba(0,255,255,0.1); }
+  .lb-row.me  { background: rgba(0,255,255,0.12); border: 1px solid rgba(0,255,255,0.35); }
+  .lb-row.clickable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .lb-row.clickable:active { background: rgba(0,255,255,0.16); transform: scale(0.98); }
+  .lb-rank { width: 28px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .lb-medal { font-size: 20px; line-height: 1; }
+  .lb-num { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.35); font-variant-numeric: tabular-nums; }
+  .lb-avatar {
+    border-radius: 50%; overflow: hidden; flex-shrink: 0;
+    background: linear-gradient(135deg, #0e2030, #061018);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; color: var(--accent);
+    border: 1.5px solid rgba(0,255,255,0.25);
+  }
+  .lb-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .lb-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; }
+  .lb-name { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.92); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lb-me-tag {
+    font-size: 10px; font-weight: 700; color: var(--accent);
+    background: rgba(0,255,255,0.14); border-radius: 5px;
+    padding: 1px 6px; flex-shrink: 0; letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .lb-score {
+    font-size: 15px; font-weight: 700; color: var(--accent);
+    font-variant-numeric: tabular-nums; flex-shrink: 0;
+    text-shadow: 0 0 10px rgba(0,255,255,0.35);
+  }
+
+  @keyframes lb-enter {
+    from { opacity: 0; transform: translateY(20px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes lb-spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -125,9 +258,36 @@
     <div class="fever" id="fever">FEVER MODE!</div>
   </div>
 
+  <div class="lb-hud">
+    <button class="lb-icon-btn" id="hudLbBtn" aria-label="Leaderboard">🏆</button>
+  </div>
+
   <div class="win-overlay" id="winOverlay">
     <div class="win-title">You broke through.</div>
     <button class="win-btn" id="playAgainBtn">PLAY AGAIN</button>
+    <button class="lb-icon-btn" id="winLbBtn" aria-label="Leaderboard">🏆</button>
+  </div>
+
+  <div id="lb-overlay">
+    <div id="lb-panel">
+      <div class="lb-hdr">
+        <div class="lb-hdr-left">
+          <span class="lb-hdr-icon">🏆</span>
+          <div>
+            <div class="lb-hdr-title" id="lb-title-text">Leaderboard</div>
+            <div class="lb-hdr-game">Layer Pop</div>
+          </div>
+        </div>
+        <button class="lb-close" id="lb-close-btn">✕</button>
+      </div>
+      <div class="lb-tabs" id="lb-tabs" style="display:none">
+        <button class="lb-tab active" id="lb-tab-global">🌍 Global</button>
+        <button class="lb-tab" id="lb-tab-friends">👥 Friends</button>
+      </div>
+      <div class="lb-body" id="lb-body">
+        <div class="lb-state"><span class="lb-spinner"></span></div>
+      </div>
+    </div>
   </div>
 
   <div class="theme-dots" id="themeDots">
@@ -229,6 +389,7 @@
     mazeRot: 0,
     targetMazeRot: 0,
     passedSinceBounce: 0,
+    peakCascade: 0,
     fever: false,
     feverVisible: false,
     feverShownAt: 0,
@@ -711,6 +872,7 @@
       if (aligned) {
         state.currentLayer--;
         state.passedSinceBounce++;
+        if (state.passedSinceBounce > state.peakCascade) state.peakCascade = state.passedSinceBounce;
         if (state.passedSinceBounce >= 3 && !state.fever) {
           state.fever = true;
           audio.feverIn();
@@ -780,8 +942,16 @@
     if (state.currentLayer <= 0 && !gameOver) {
       gameOver = true;
       setTimeout(() => winOverlay.classList.add('show'), 500);
+      if (window.LP_LB) window.LP_LB.submit(currentScore(), true);
     }
   }
+
+  // Expose state + score for the leaderboard module
+  function currentScore() {
+    const layersPopped = 1000 - Math.max(0, state.currentLayer);
+    return layersPopped + state.peakCascade * 10;
+  }
+  window.LP_GAME = { currentScore, getState: () => state };
 
   // ----- Render --------------------------------------------------------------
   function fillBackground() {
@@ -896,6 +1066,184 @@
     running = document.visibilityState === 'visible';
     lastT = performance.now();
   });
+})();
+
+// ── Leaderboard Module ─────────────────────────────────────────────────────
+(function () {
+  'use strict';
+  const GAMES_API = 'https://games-api.xinghuan-yin.workers.dev';
+  const GAME_ID   = 'layer-pop';
+
+  function toB64(s)   { return btoa(unescape(encodeURIComponent(s))); }
+  function fromB64(s) { return decodeURIComponent(escape(atob(s))); }
+
+  const params     = new URLSearchParams(window.location.search);
+  const telegramId = params.get('telegram_id') || null;
+  const rawOrigin  = params.get('api_origin');
+  const apiOrigin  = rawOrigin ? decodeURIComponent(rawOrigin) : null;
+  const isInAigram = !!(telegramId && apiOrigin);
+
+  let currentUser = null;
+  let lastSubmittedScore = 0;
+
+  function callAigramAPI(url) {
+    return new Promise((resolve, reject) => {
+      const id = crypto.randomUUID();
+      let timer;
+      const handler = e => {
+        if (e.origin !== apiOrigin) return;
+        const msg = typeof e.data === 'string' ? e.data : '';
+        if (!msg.startsWith('callAPIResult-')) return;
+        try {
+          const r = JSON.parse(fromB64(msg.slice('callAPIResult-'.length)));
+          if (r.request_id !== id) return;
+          window.removeEventListener('message', handler);
+          clearTimeout(timer);
+          if (r.success) resolve(r.data); else reject(new Error(r.error || 'API error'));
+        } catch {}
+      };
+      window.addEventListener('message', handler);
+      window.parent.postMessage(
+        'callAPI-' + toB64(JSON.stringify({ url, method: 'GET', data: null, request_id: id, emitter: window.location.origin })),
+        apiOrigin
+      );
+      timer = setTimeout(() => { window.removeEventListener('message', handler); reject(new Error('timeout')); }, 10000);
+    });
+  }
+
+  if (isInAigram) {
+    callAigramAPI(`/note/telegram/user/get/info/by/telegram_id?telegram_id=${telegramId}`)
+      .then(r => { currentUser = r.data; }).catch(() => {});
+  }
+
+  function submit(score, force) {
+    if (!telegramId || !score || score <= 0) return;
+    if (!force && score <= lastSubmittedScore) return;
+    lastSubmittedScore = score;
+    fetch(`${GAMES_API}/score`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        game_id: GAME_ID, telegram_id: telegramId,
+        name: (currentUser && currentUser.name) || telegramId,
+        avatar_url: (currentUser && currentUser.head_url) || '',
+        score,
+      }),
+    }).catch(() => {});
+  }
+
+  async function fetchGlobal() {
+    const res = await fetch(`${GAMES_API}/leaderboard?game_id=${GAME_ID}&limit=50`);
+    const json = await res.json();
+    return (json.leaderboard || []).map(e => Object.assign({}, e, { isMe: e.telegram_id === telegramId }));
+  }
+
+  async function fetchFriends() {
+    if (!isInAigram) return [];
+    const friendIds = new Set([telegramId]);
+    try {
+      const contacts = await callAigramAPI(`/note/telegram/user/contact/list?telegram_id=${telegramId}`);
+      const list = Array.isArray(contacts) ? contacts : (contacts && contacts.data ? contacts.data : []);
+      list.forEach(f => { if (f.telegram_id) friendIds.add(String(f.telegram_id)); });
+    } catch {}
+    try {
+      const ids = [...friendIds].join(',');
+      const res = await fetch(`${GAMES_API}/leaderboard?game_id=${GAME_ID}&telegram_ids=${encodeURIComponent(ids)}`);
+      const json = await res.json();
+      return (json.leaderboard || []).map(e => Object.assign({}, e, { isMe: e.telegram_id === telegramId }));
+    } catch { return []; }
+  }
+
+  function openProfile(tid) {
+    if (!apiOrigin || !tid) return;
+    try { window.parent.postMessage('AW.PROFILE.OPEN-' + btoa(JSON.stringify({ id: tid })), apiOrigin); } catch {}
+  }
+
+  window.LP_LB = { submit, isInAigram };
+
+  // Submit on tab hide / close — captures session progress even without a win
+  function saveOnHide() {
+    if (!window.LP_GAME) return;
+    submit(window.LP_GAME.currentScore(), false);
+  }
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') saveOnHide();
+  });
+  window.addEventListener('pagehide', saveOnHide);
+
+  // ── UI ──────────────────────────────────────────────────────────────────
+  const MEDALS = ['🥇','🥈','🥉'];
+  const overlay = document.getElementById('lb-overlay');
+  const body    = document.getElementById('lb-body');
+  const tabs    = document.getElementById('lb-tabs');
+  const tabGlobal  = document.getElementById('lb-tab-global');
+  const tabFriends = document.getElementById('lb-tab-friends');
+
+  const isZh = (!localStorage.getItem('game_locale') && navigator.language.toLowerCase().startsWith('zh'))
+             || localStorage.getItem('game_locale') === 'zh';
+  const STR = isZh
+    ? { me:'我', empty:'暂无记录,快来第一个上榜!', emptyFriends:'好友还未上榜', failed:'加载失败' }
+    : { me:'me', empty:'No records yet. Be the first!', emptyFriends:'No friends on the board yet.', failed:'Load failed' };
+
+  if (isInAigram) tabs.style.display = 'flex';
+
+  let currentTab = 'global';
+
+  function openLB()  { overlay.classList.add('show'); loadTab(currentTab); }
+  function closeLB() { overlay.classList.remove('show'); }
+
+  function avatarHTML(url, name, size) {
+    const s = size || 38;
+    if (url) return `<div class="lb-avatar" style="width:${s}px;height:${s}px"><img src="${url}" alt=""></div>`;
+    const initial = (name || '?').charAt(0).toUpperCase();
+    return `<div class="lb-avatar" style="width:${s}px;height:${s}px;font-size:${Math.round(s*0.38)}px">${initial}</div>`;
+  }
+
+  async function loadTab(tab) {
+    body.innerHTML = '<div class="lb-state"><span class="lb-spinner"></span></div>';
+    tabGlobal.classList.toggle('active', tab === 'global');
+    tabFriends.classList.toggle('active', tab === 'friends');
+    try {
+      const entries = tab === 'global' ? await fetchGlobal() : await fetchFriends();
+      if (entries.length === 0) {
+        body.innerHTML = `<div class="lb-state"><span class="lb-state-icon">🎮</span><span class="lb-state-text">${tab === 'friends' ? STR.emptyFriends : STR.empty}</span></div>`;
+        return;
+      }
+      body.innerHTML = entries.map((e, i) => {
+        const isTop = i < 3;
+        const rank = isTop ? `<span class="lb-medal">${MEDALS[i]}</span>` : `<span class="lb-num">${i+1}</span>`;
+        const av = avatarHTML(e.avatar_url, e.name, isTop ? 42 : 36);
+        const meTag = e.isMe ? `<span class="lb-me-tag">${STR.me}</span>` : '';
+        const clickable = isInAigram ? ' clickable' : '';
+        const safeName = String(e.name || '').replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
+        return `<div class="lb-row${isTop?' top':''}${e.isMe?' me':''}${clickable}" data-tid="${e.telegram_id}">
+          <div class="lb-rank">${rank}</div>
+          ${av}
+          <div class="lb-info"><span class="lb-name">${safeName}</span>${meTag}</div>
+          <span class="lb-score">${Number(e.score).toLocaleString()}</span>
+        </div>`;
+      }).join('');
+      if (isInAigram) {
+        body.querySelectorAll('.lb-row.clickable').forEach(row => {
+          row.addEventListener('pointerdown', () => openProfile(row.dataset.tid));
+        });
+      }
+    } catch {
+      body.innerHTML = `<div class="lb-state"><span class="lb-state-text">${STR.failed}</span></div>`;
+    }
+  }
+
+  tabGlobal.addEventListener('pointerdown', () => { currentTab='global'; loadTab('global'); });
+  tabFriends.addEventListener('pointerdown', () => { currentTab='friends'; loadTab('friends'); });
+  document.getElementById('lb-close-btn').addEventListener('pointerdown', closeLB);
+  overlay.addEventListener('pointerdown', e => { if (e.target === overlay) closeLB(); });
+
+  function wire(id) {
+    const btn = document.getElementById(id);
+    if (btn) btn.addEventListener('pointerdown', e => { e.stopPropagation(); openLB(); });
+  }
+  wire('hudLbBtn');
+  wire('winLbBtn');
 })();
 </script>
 </body>
