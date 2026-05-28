@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="en">
 <head>
+    <meta name="game-uuid" content="d8d3b9bf-05a7-420a-b441-6b3357020d02" />
+
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -8,6 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <link rel="icon" type="image/gif" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" />
 <title>Layer Pop</title>
+<script src="./aigram-bridge.js"></script>
 <style>
   :root { --bg: #0b001a; --accent: #00ffff; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -279,10 +282,6 @@
           </div>
         </div>
         <button class="lb-close" id="lb-close-btn">✕</button>
-      </div>
-      <div class="lb-tabs" id="lb-tabs" style="display:none">
-        <button class="lb-tab active" id="lb-tab-global">🌍 Global</button>
-        <button class="lb-tab" id="lb-tab-friends">👥 Friends</button>
       </div>
       <div class="lb-body" id="lb-body">
         <div class="lb-state"><span class="lb-spinner"></span></div>
@@ -1069,95 +1068,53 @@
 })();
 
 // ── Leaderboard Module ─────────────────────────────────────────────────────
+// Talks to Aigram platform via window.Aigram (see aigram-bridge.js).
 (function () {
   'use strict';
-  const GAMES_API = 'https://games-api.xinghuan-yin.workers.dev';
   const GAME_ID   = 'layer-pop';
 
-  function toB64(s)   { return btoa(unescape(encodeURIComponent(s))); }
-  function fromB64(s) { return decodeURIComponent(escape(atob(s))); }
-
-  const params     = new URLSearchParams(window.location.search);
-  const telegramId = params.get('telegram_id') || null;
-  const rawOrigin  = params.get('api_origin');
-  const apiOrigin  = rawOrigin ? decodeURIComponent(rawOrigin) : null;
-  const isInAigram = !!(telegramId && apiOrigin);
+  const A = window.Aigram;
+  const { telegramId, apiOrigin, isInAigram, gameUuid, callAigramAPI, openAigramProfile } = A;
 
   let currentUser = null;
   let lastSubmittedScore = 0;
 
-  function callAigramAPI(url) {
-    return new Promise((resolve, reject) => {
-      const id = crypto.randomUUID();
-      let timer;
-      const handler = e => {
-        if (e.origin !== apiOrigin) return;
-        const msg = typeof e.data === 'string' ? e.data : '';
-        if (!msg.startsWith('callAPIResult-')) return;
-        try {
-          const r = JSON.parse(fromB64(msg.slice('callAPIResult-'.length)));
-          if (r.request_id !== id) return;
-          window.removeEventListener('message', handler);
-          clearTimeout(timer);
-          if (r.success) resolve(r.data); else reject(new Error(r.error || 'API error'));
-        } catch {}
-      };
-      window.addEventListener('message', handler);
-      window.parent.postMessage(
-        'callAPI-' + toB64(JSON.stringify({ url, method: 'GET', data: null, request_id: id, emitter: window.location.origin })),
-        apiOrigin
-      );
-      timer = setTimeout(() => { window.removeEventListener('message', handler); reject(new Error('timeout')); }, 10000);
-    });
-  }
-
-  if (isInAigram) {
+  if (isInAigram && telegramId) {
     callAigramAPI(`/note/telegram/user/get/info/by/telegram_id?telegram_id=${telegramId}`)
-      .then(r => { currentUser = r.data; }).catch(() => {});
+      .then(r => { currentUser = r && r.data; }).catch(() => {});
   }
 
   function submit(score, force) {
-    if (!telegramId || !score || score <= 0) return;
+    if (!A.canRank || !score || score <= 0) return;
     if (!force && score <= lastSubmittedScore) return;
     lastSubmittedScore = score;
-    fetch(`${GAMES_API}/score`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        game_id: GAME_ID, telegram_id: telegramId,
-        name: (currentUser && currentUser.name) || telegramId,
-        avatar_url: (currentUser && currentUser.head_url) || '',
-        score,
-      }),
-    }).catch(() => {});
+    callAigramAPI(
+      '/note/aigram/ai/game/rank/score/save',
+      'POST',
+      { session_id: gameUuid, score }
+    ).catch(() => {});
   }
 
   async function fetchGlobal() {
-    const res = await fetch(`${GAMES_API}/leaderboard?game_id=${GAME_ID}&limit=50`);
-    const json = await res.json();
-    return (json.leaderboard || []).map(e => Object.assign({}, e, { isMe: e.telegram_id === telegramId }));
-  }
-
-  async function fetchFriends() {
-    if (!isInAigram) return [];
-    const friendIds = new Set([telegramId]);
+    if (!A.canRank) return [];
     try {
-      const contacts = await callAigramAPI(`/note/telegram/user/contact/list?telegram_id=${telegramId}`);
-      const list = Array.isArray(contacts) ? contacts : (contacts && contacts.data ? contacts.data : []);
-      list.forEach(f => { if (f.telegram_id) friendIds.add(String(f.telegram_id)); });
-    } catch {}
-    try {
-      const ids = [...friendIds].join(',');
-      const res = await fetch(`${GAMES_API}/leaderboard?game_id=${GAME_ID}&telegram_ids=${encodeURIComponent(ids)}`);
-      const json = await res.json();
-      return (json.leaderboard || []).map(e => Object.assign({}, e, { isMe: e.telegram_id === telegramId }));
+      const r = await callAigramAPI(
+        `/note/aigram/ai/game/rank/score/list/by/session_id?session_id=${encodeURIComponent(gameUuid)}`
+      );
+      const rows = (r && Array.isArray(r.data)) ? r.data : (Array.isArray(r) ? r : []);
+      return rows.map(row => ({
+        telegram_id: String(row.user_id),
+        name: row.user_name,
+        avatar_url: row.head_url,
+        score: Number(row.score),
+        rank: row.rank,
+        isMe: String(row.user_id) === String(telegramId),
+      }));
     } catch { return []; }
   }
 
-  function openProfile(tid) {
-    if (!apiOrigin || !tid) return;
-    try { window.parent.postMessage('AW.PROFILE.OPEN-' + btoa(JSON.stringify({ id: tid })), apiOrigin); } catch {}
-  }
+  async function fetchFriends() { return []; }
+  function openProfile(tid) { openAigramProfile(tid); }
 
   window.LP_LB = { submit, isInAigram };
 
@@ -1175,21 +1132,14 @@
   const MEDALS = ['🥇','🥈','🥉'];
   const overlay = document.getElementById('lb-overlay');
   const body    = document.getElementById('lb-body');
-  const tabs    = document.getElementById('lb-tabs');
-  const tabGlobal  = document.getElementById('lb-tab-global');
-  const tabFriends = document.getElementById('lb-tab-friends');
 
   const isZh = (!localStorage.getItem('game_locale') && navigator.language.toLowerCase().startsWith('zh'))
              || localStorage.getItem('game_locale') === 'zh';
   const STR = isZh
-    ? { me:'我', empty:'暂无记录,快来第一个上榜!', emptyFriends:'好友还未上榜', failed:'加载失败' }
-    : { me:'me', empty:'No records yet. Be the first!', emptyFriends:'No friends on the board yet.', failed:'Load failed' };
+    ? { me:'我', empty:'暂无记录,快来第一个上榜!', failed:'加载失败' }
+    : { me:'me', empty:'No records yet. Be the first!', failed:'Load failed' };
 
-  if (isInAigram) tabs.style.display = 'flex';
-
-  let currentTab = 'global';
-
-  function openLB()  { overlay.classList.add('show'); loadTab(currentTab); }
+  function openLB()  { overlay.classList.add('show'); load(); }
   function closeLB() { overlay.classList.remove('show'); }
 
   function avatarHTML(url, name, size) {
@@ -1199,14 +1149,12 @@
     return `<div class="lb-avatar" style="width:${s}px;height:${s}px;font-size:${Math.round(s*0.38)}px">${initial}</div>`;
   }
 
-  async function loadTab(tab) {
+  async function load() {
     body.innerHTML = '<div class="lb-state"><span class="lb-spinner"></span></div>';
-    tabGlobal.classList.toggle('active', tab === 'global');
-    tabFriends.classList.toggle('active', tab === 'friends');
     try {
-      const entries = tab === 'global' ? await fetchGlobal() : await fetchFriends();
+      const entries = await fetchGlobal();
       if (entries.length === 0) {
-        body.innerHTML = `<div class="lb-state"><span class="lb-state-icon">🎮</span><span class="lb-state-text">${tab === 'friends' ? STR.emptyFriends : STR.empty}</span></div>`;
+        body.innerHTML = `<div class="lb-state"><span class="lb-state-icon">🎮</span><span class="lb-state-text">${STR.empty}</span></div>`;
         return;
       }
       body.innerHTML = entries.map((e, i) => {
@@ -1233,8 +1181,6 @@
     }
   }
 
-  tabGlobal.addEventListener('pointerdown', () => { currentTab='global'; loadTab('global'); });
-  tabFriends.addEventListener('pointerdown', () => { currentTab='friends'; loadTab('friends'); });
   document.getElementById('lb-close-btn').addEventListener('pointerdown', closeLB);
   overlay.addEventListener('pointerdown', e => { if (e.target === overlay) closeLB(); });
 
